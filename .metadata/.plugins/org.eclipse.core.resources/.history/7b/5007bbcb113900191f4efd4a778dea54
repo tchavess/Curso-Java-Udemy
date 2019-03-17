@@ -1,0 +1,28 @@
+
+public class Student {
+	public String name;
+	public double nota1;
+	public double nota2;
+	public double nota3;
+	
+	public double media() {
+		double media = (nota1+nota2+nota3)/3;
+		return media;
+		
+	}
+
+	public void result(double media) {
+		
+		if(media >= 60.00) {
+			System.out.println("FINAL GRADE = " + media);
+			System.out.println("PASS");
+		}else {
+			double failed = 60.00-media;
+			System.out.println("FINAL GRADE = " + media);
+			System.out.println("FAILED");
+			System.out.println("MISSING " + failed);
+		}
+		
+		}
+
+}

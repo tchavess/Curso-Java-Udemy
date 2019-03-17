@@ -1,0 +1,38 @@
+import java.util.Locale;
+import java.util.Scanner;
+
+public class Aplicattion {
+
+	public static void main(String[] args) {
+		// TODO Auto-generated method stub
+		
+		Scanner sc =  new Scanner(System.in);
+		Locale.setDefault(Locale.US);
+		Student std = new Student();
+		
+		System.out.print("Name: ");
+		std.name = sc.nextLine();
+		
+		System.out.print("Nota 1: ");
+		std.nota1 = sc.nextDouble();
+		System.out.print("Nota 2: ");
+		std.nota2 = sc.nextDouble();
+		System.out.print("Nota 3: ");
+		std.nota3 = sc.nextDouble();
+		
+		System.out.println("Name: " + std.name);
+			
+			if(std.media() >= 60.00) {
+				System.out.println("FINAL GRADE = " + std.media());
+				System.out.println("PASS");
+			}else {
+				double failed = 60.00-std.media();
+				System.out.println("FINAL GRADE = " + std.media());
+				System.out.println("FAILED");
+				System.out.println("MISSING " + failed);
+			}
+		
+sc.close();
+	}
+
+}

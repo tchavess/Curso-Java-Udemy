@@ -1,0 +1,265 @@
+package com.coddera.oi.AutomatorSocketBridge.infra;
+
+import com.coddera.oi.AutomatorSocketBridge.bean.ResponseError;
+import com.coddera.oi.AutomatorSocketBridge.bean.SocketResponse;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Service;
+import sun.misc.IoTrace;
+
+import java.io.*;
+import java.net.*;
+import java.text.SimpleDateFormat;
+
+@Service
+@Qualifier("socketclient")
+public class SocketClient implements ISocketClient{
+
+    private static final Logger logger = LogManager.getLogger(SocketClient.class);
+    private final String serverAddress = "127.0.0.1";
+    private final int serverPort = 10012;
+    private ResponseError responseError;
+    private SocketResponse socketResponse;
+    private Socket socket;
+    private BufferedReader brEntrada;
+    private PrintWriter pwSaida;
+    private InputStreamReader isrEntrada;
+    private StringBuilder sb;
+
+    @Override
+    public synchronized SocketResponse sendAndReceiveFromSocket(String command) {
+        logger.info("--------SEND AND RECEIVE MESSAGE FROM AUTOMATOR-------");
+        logger.debug("-------Qualifier socket client -------");
+        logger.debug("-------Send and receive from socket BEGIN -------");
+        long tempoInicial = System.currentTimeMillis();
+        String resposta = "";
+        socketResponse = new SocketResponse();
+
+        try {
+            startConnection(serverAddress,serverPort);
+            sendMessageToServer(command);
+            //socketResponse.setResponse(receiveMessageFromServer());
+            //socketResponse.setStatus("OK");
+            socketResponse.responseOk(receiveMessageFromServer());
+        } catch (ConnectException e) {
+            socketResponse.responseError(e.getMessage());
+            //socketResponse.setResponse(e.getMessage());
+            //socketResponse.setStatus("ERROR");
+        } catch (SocketTimeoutException e) {
+            //socketResponse.setResponse(e.getMessage());
+            //socketResponse.setStatus("ERROR");
+            socketResponse.responseError(e.getMessage());
+        } catch (Exception e){
+            //socketResponse.setResponse(e.getMessage());
+            //socketResponse.setStatus("ERROR");
+            socketResponse.responseError(e.getMessage());
+        }
+
+
+        long tempoFinal = System.currentTimeMillis();
+        logger.debug("-------Send and receive from socket END-------");
+        logger.info("SEND AND RECEIVE EXECUTION TIME: " +  new SimpleDateFormat("hh:mm:ss.SSS").format((tempoFinal - tempoInicial)));
+
+        return socketResponse;
+    }
+
+    private void startConnection(String server, int port) throws IOException {
+        String status = null;
+        long tempoInicial = System.currentTimeMillis();
+
+        logger.debug("-------Start Connection with socket------");
+
+        if(!isConnectionOpen()){
+            logger.debug("------SOCKET IS OPEN-------");
+            try {
+                initCommunicationWithSocket();
+            } catch (IOException e) {
+                status = "Não foi possível iniciar stream. " + e.getMessage();
+                logger.debug(status);
+                throw new IOException(status);
+            }
+        }else {
+            try {
+                logger.info("-------CONNECTING TO AUTOMATOR");
+                logger.debug("-------OPENING SOCKET CONNECTION-------");
+                InetAddress inteAddress = InetAddress.getByName(server);
+                SocketAddress socketAddress = new InetSocketAddress(inteAddress, port);
+
+                socket = new Socket();
+                //int timeoutInMs = 100*1000;   // 30 seconds
+                logger.debug("CONNECTING TO SOCKET...");
+                socket.connect(socketAddress);//, //timeoutInMs);
+                socket.setKeepAlive(false);
+                logger.debug("SOCKET IS CONNECTED AT SERVER: " + socketAddress.toString());
+                logger.info("CONNECTED TO AUTOMATOR ON ADDRESS: " + socketAddress.toString());
+                initCommunicationWithSocket();
+
+
+            } catch (SocketTimeoutException e) {
+                status = "Tempo de conexão expirado.";
+                logger.debug(status);
+                logger.info("ERRO AO ENVIAR COMMANDO: " + status);
+                //e.printStackTrace();
+                throw new SocketTimeoutException(status);
+
+            } catch (ConnectException e) {
+                //error ok// Err con01
+                status = "Não foi possível conectar com o Autormator. err:con01";
+                socket.close();
+                logger.debug("Não foi possível conectar com o servidor " + server + ":" + port);
+                logger.info("ERRO AO FECHAR CONEXAO: " + status);
+                //e.printStackTrace();
+                throw new ConnectException(status);
+            }catch (Exception e){
+                status = "Erro desconhecido.";
+                logger.debug(status);
+                logger.info("ERRO AO PROCESSAR COMMANDO: " + status);
+                e.printStackTrace();
+            } finally {
+                long tempoFinal = System.currentTimeMillis();
+                logger.debug("-------Connection with socket was successful------");
+                logger.debug(" SOCKET EXECUTION TIME: " + (tempoFinal - tempoInicial));
+                logger.info(" CONNECTION TIME WITH AUTOMATOR: " + (tempoFinal - tempoInicial));
+            }
+        }
+
+    }
+
+    private synchronized void sendMessageToServer(String message) throws IOException,Exception{
+        String status = "ok";
+        logger.debug("--Sending command---> " + message);
+        if (socket.isConnected()) {
+            try {
+
+                logger.info("ENVIANDO COMANDO PARA AUTOMATOR");
+               // pwSaida = new PrintWriter(socket.getOutputStream(), true);
+                pwSaida.println(message);
+                //pwSaida.close();
+                logger.debug("--Message sended to server---> " + message);
+                logger.info("COMANDO ENVIADO COM SUCESSO!");
+            } catch (Exception e){
+
+                status = "Não foi possível enviar mensagem para o Automator: Erro desconhecido.";
+                logger.info("ERRO AO ENVIAR COMMANDO: " + status);
+                //e.printStackTrace();
+                throw new Exception(status);
+            }
+        }else{
+            status = "Não foi possível enviar mensagem para o Automator: Socket não conectado.";
+            logger.debug("Excessão lançada: " + "Não foi possível enviar mensagem para o Automator: Socket não conectado.");
+            logger.info("ERRO AO ENVIAR COMMANDO: " + status);
+            throw new Exception(status);
+        }
+        //return status;
+    }
+
+    private synchronized String receiveMessageFromServer() throws IOException,Exception{
+
+        logger.debug("--RECEIVING MESSAGE FROM SERVER--");
+        String str = "";
+        String resposta = "";
+
+        try {
+            isrEntrada = new InputStreamReader(socket.getInputStream());
+            brEntrada = new BufferedReader(isrEntrada);
+            logger.info("RECEBENDO MENSAGEM DO AUTOMATOR.... " );
+            logger.debug("--Receiving message--");
+            resposta = brEntrada.readLine();
+            logger.debug("--Message received--");
+            logger.info("MENSAGEM RECEBIDA....");
+            //sb = new StringBuilder();
+        } catch (SocketException e){
+            throw new SocketException("Não foi possível receber informações do Automator: Conexão resetada.");
+        } catch (IOException e) {
+            //e.printStackTrace();
+            throw new IOException("Não foi possivel receber informações do Automator: Automator não responde.");
+            //throw new IOException()
+        } catch (Exception e){
+            //e.printStackTrace();
+            throw new IOException("Não foi possivel receber informações do Automator: Erro indefinido.");
+        }
+
+        return resposta;
+
+
+    }
+
+    private boolean isConnectionOpen(){
+
+        boolean isSocketClosed;
+        try {
+            isSocketClosed = socket.isClosed();
+            logger.debug("...SOCKET IS OPEN...");
+        }catch (NullPointerException e){
+            //error ok
+            logger.debug("...SOCKET IS CLOSED...");
+            //e.printStackTrace();
+            isSocketClosed = true;
+        }
+        return isSocketClosed;
+    }
+
+    private void initCommunicationWithSocket() throws IOException{
+
+        String status = "";
+        if(pwSaida==null){
+
+            try {
+                pwSaida = new PrintWriter(socket.getOutputStream(),true);
+            } catch (IOException e) {
+                logger.debug("Erro ao iniciar PrintWriter: " + e.getMessage());
+                //e.printStackTrace();
+                throw new IOException("Não foi possível enviar mensagem para o Automator: Automator não responde.");
+            }
+
+        }
+
+        if(isrEntrada==null) {
+            try {
+                isrEntrada = new InputStreamReader(socket.getInputStream());
+                brEntrada = new BufferedReader(isrEntrada);
+                //sb = new StringBuilder();
+            } catch (IOException e) {
+                status = "Não foi possível ler mensagem para o Automator: Automator nao responde.";
+                logger.debug("Erro ao iniciar Readers: " + status);
+                //e.printStackTrace();
+                throw new IOException(status);
+            }
+        }
+
+    }
+
+    private void closeCommunicationWithSocket(){
+        try {
+            if(pwSaida!=null || brEntrada!=null ){
+                pwSaida.close();
+                brEntrada.close();
+            }
+
+        } catch (IOException e) {
+            logger.debug("Erro ao fechar InputStream: " + e.getMessage());
+            //e.printStackTrace();
+        }
+    }
+
+    private void closeConnection() {
+        if(socket!=null || socket.isConnected()==true) {
+            try {
+                socket.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        logger.debug("SocketClient.End");
+
+    }
+
+    private void dumpAndReconect(){
+
+
+
+
+    }
+
+}
